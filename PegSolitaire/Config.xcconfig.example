@@ -1,0 +1,9 @@
+// Example configuration file for PegSolitaire project
+// Copy this file to Config.xcconfig and fill in your actual values
+// DO NOT commit Config.xcconfig to version control
+
+DEVELOPMENT_TEAM = YOUR_TEAM_ID_HERE
+PRODUCT_BUNDLE_IDENTIFIER = your.bundle.identifier
+PRODUCT_BUNDLE_IDENTIFIER_TESTS = your.bundle.identifier.Tests
+PRODUCT_BUNDLE_IDENTIFIER_UITESTS = your.bundle.identifier.UITests
+

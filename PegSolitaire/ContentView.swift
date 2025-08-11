@@ -1,3 +1,10 @@
+//
+//  ContentView.swift
+//  PegSolitaire
+//
+//  Created by Onno Speekenbrink on 2025-08-11.
+//
+
 import SwiftUI
 
 struct ContentView: View {
@@ -10,8 +17,8 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let padding: CGFloat = 10
-            let boardSize = min(geo.size.width, geo.size.height * 0.8) - padding * 2
+            let padding: CGFloat = 20
+            let boardSize = min(geo.size.width, geo.size.height) - padding * 2
             VStack {
                 Spacer()
                 boardView(size: boardSize)
