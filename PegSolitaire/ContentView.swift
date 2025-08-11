@@ -30,13 +30,13 @@ struct ContentView: View {
                     }
                 Spacer()
                 HStack {
-                    Button(action: undo) {
-                        Image(systemName: "arrow.uturn.backward")
+                    Button(action: newGame) {
+                        Image(systemName: "arrow.clockwise")
                             .font(.largeTitle)
                     }
                     Spacer()
-                    Button(action: newGame) {
-                        Image(systemName: "arrow.clockwise")
+                    Button(action: undo) {
+                        Image(systemName: "arrow.uturn.backward")
                             .font(.largeTitle)
                     }
                 }
