@@ -9,7 +9,7 @@
 -- Click a highlighted destination to move the peg. 
 -- Click outside the board to unfocus the selected peg.
 -- If there is only a single move, clicking the focused peg will move it.
-- Undo button on the bottom left of the screen, featuring the standard undo round arrow.
-- New Game button on the bottom right.
+- New Game button on the bottom left.
+- Undo button on the bottom right of the screen, featuring the standard undo round arrow.
 - When there are no moves left, show a popup with the number of pegs left and two buttons: new game or undo last move.
 - When you win the game, show a screen with congratulations and fireworks in the background. Single button "new game"
