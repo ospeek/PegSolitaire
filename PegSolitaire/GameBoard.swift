@@ -97,4 +97,25 @@ struct Board {
     func pegCount() -> Int {
         cells.flatMap { $0 }.filter { if case .peg = $0 { return true } else { return false } }.count
     }
+
+    func multiMoveDestinations(from start: Position) -> [Position: [Move]] {
+        guard cell(at: start) == .peg else { return [:] }
+        var result: [Position: [Move]] = [:]
+        func dfs(board: Board, pos: Position, path: [Move]) {
+            let moves = board.moves(from: pos)
+            if !path.isEmpty, result[pos] == nil {
+                result[pos] = path
+            }
+            for m in moves {
+                var newBoard = board
+                newBoard.apply(m)
+                var newPath = path
+                newPath.append(m)
+                dfs(board: newBoard, pos: m.to, path: newPath)
+            }
+        }
+        dfs(board: self, pos: start, path: [])
+        result.removeValue(forKey: start)
+        return result
+    }
 }

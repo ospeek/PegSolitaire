@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var board = Board.standard()
     @State private var selected: Position? = nil
+    @State private var multiMovePaths: [Position: [Move]] = [:]
     @State private var history: [Board] = []
     @State private var showGameOver = false
     @State private var showWin = false
@@ -27,16 +28,17 @@ struct ContentView: View {
                     .background(Color(UIColor.systemBackground))
                     .onTapGesture {
                         selected = nil
+                        updateMultiMovePaths()
                     }
                 Spacer()
                 HStack {
-                    Button(action: undo) {
-                        Image(systemName: "arrow.uturn.backward")
+                    Button(action: newGame) {
+                        Image(systemName: "arrow.clockwise")
                             .font(.largeTitle)
                     }
                     Spacer()
-                    Button(action: newGame) {
-                        Image(systemName: "arrow.clockwise")
+                    Button(action: undo) {
+                        Image(systemName: "arrow.uturn.backward")
                             .font(.largeTitle)
                     }
                 }
@@ -136,7 +138,7 @@ struct ContentView: View {
     }
 
     func destinationHighlight(_ pos: Position) -> some View {
-        let dests = selected.map { Set(board.moves(from: $0).map { $0.to }) } ?? []
+        let dests = Set(multiMovePaths.keys)
         return Group {
             if dests.contains(pos) {
                 Circle()
@@ -149,11 +151,11 @@ struct ContentView: View {
 
     func handleTap(on pos: Position) {
         if selected == pos {
-            let moves = board.moves(from: pos)
-            if moves.count == 1 {
-                attemptMove(moves[0])
+            if multiMovePaths.count == 1, let path = multiMovePaths.values.first {
+                attemptMultiMove(path)
             } else {
                 selected = nil
+                updateMultiMovePaths()
             }
             return
         }
@@ -163,6 +165,7 @@ struct ContentView: View {
         } else {
             selected = pos
         }
+        updateMultiMovePaths()
     }
 
     func attemptMove(_ move: Move) {
@@ -177,23 +180,39 @@ struct ContentView: View {
             evaluateGameState()
         }
         selected = nil
+        updateMultiMovePaths()
+        evaluateGameState()
     }
 
     func attemptMove(from: Position, to: Position) {
-        let moves = board.moves(from: from)
-        if let move = moves.first(where: { $0.to == to }) {
-            attemptMove(move)
+        if let path = multiMovePaths[to] {
+            attemptMultiMove(path)
         } else if board.moves(from: to).count > 0 {
             selected = to
+            updateMultiMovePaths()
         } else {
             selected = nil
+            updateMultiMovePaths()
         }
+    }
+
+    func attemptMultiMove(_ moves: [Move]) {
+        history.append(board)
+        withAnimation(.easeInOut(duration: 0.6)) {
+            for m in moves {
+                board.apply(m)
+            }
+        }
+        selected = nil
+        updateMultiMovePaths()
+        evaluateGameState()
     }
 
     func undo() {
         if let last = history.popLast() {
             board = last
             selected = nil
+            updateMultiMovePaths()
         }
     }
 
@@ -201,6 +220,7 @@ struct ContentView: View {
         board = Board.standard()
         history = []
         selected = nil
+        updateMultiMovePaths()
         showWin = false
         showGameOver = false
     }
@@ -210,6 +230,14 @@ struct ContentView: View {
             showWin = true
         } else if board.allMoves().isEmpty {
             showGameOver = true
+        }
+    }
+
+    func updateMultiMovePaths() {
+        if let sel = selected {
+            multiMovePaths = board.multiMoveDestinations(from: sel)
+        } else {
+            multiMovePaths = [:]
         }
     }
 }
