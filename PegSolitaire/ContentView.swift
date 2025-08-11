@@ -10,11 +10,13 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geo in
+            let padding: CGFloat = 10
+            let boardSize = min(geo.size.width, geo.size.height * 0.8) - padding * 2
             VStack {
                 Spacer()
-                boardView(size: min(geo.size.width, geo.size.height * 0.8))
+                boardView(size: boardSize)
                     .rotationEffect(orientationAngle)
-                    .padding()
+                    .padding(padding)
                     .background(Color(UIColor.systemBackground))
                     .onTapGesture {
                         selected = nil
