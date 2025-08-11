@@ -167,9 +167,16 @@ struct ContentView: View {
 
     func attemptMove(_ move: Move) {
         history.append(board)
-        board.apply(move)
+        withAnimation(.easeInOut(duration: 0.6)) {
+            board.movePeg(from: move.from, to: move.to)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            withAnimation(.easeInOut(duration: 0.6)) {
+                board.removePeg(at: move.over)
+            }
+            evaluateGameState()
+        }
         selected = nil
-        evaluateGameState()
     }
 
     func attemptMove(from: Position, to: Position) {
@@ -215,5 +222,6 @@ struct PegView: View {
             .overlay(
                 Circle().stroke(Color.primary, lineWidth: isSelected ? 4 : 0)
             )
+            .transition(.opacity)
     }
 }
