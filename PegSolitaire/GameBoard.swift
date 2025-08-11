@@ -85,6 +85,15 @@ struct Board {
         cells[move.to.row][move.to.col] = .peg
     }
 
+    mutating func movePeg(from: Position, to: Position) {
+        cells[from.row][from.col] = .empty
+        cells[to.row][to.col] = .peg
+    }
+
+    mutating func removePeg(at pos: Position) {
+        cells[pos.row][pos.col] = .empty
+    }
+
     func pegCount() -> Int {
         cells.flatMap { $0 }.filter { if case .peg = $0 { return true } else { return false } }.count
     }

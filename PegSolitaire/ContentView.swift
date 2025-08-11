@@ -171,7 +171,13 @@ struct ContentView: View {
     func attemptMove(_ move: Move) {
         history.append(board)
         withAnimation(.easeInOut(duration: 0.6)) {
-            board.apply(move)
+            board.movePeg(from: move.from, to: move.to)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            withAnimation(.easeInOut(duration: 0.6)) {
+                board.removePeg(at: move.over)
+            }
+            evaluateGameState()
         }
         selected = nil
         updateMultiMovePaths()
