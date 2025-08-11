@@ -1,0 +1,15 @@
+# Peg Solitare Game
+- Standard 32 peg solitaire game.
+- Ad-free
+- Supports dark and light mode according to system settings
+- Monochrome white on black or black on white.
+- Single portrait orientation, when you turn the phone, the board turns along with it
+- Drag and drop pegs.
+- Click a peg to focus and highlight its possible moves. 
+-- Click a highlighted destination to move the peg. 
+-- Click outside the board to unfocus the selected peg.
+-- If there is only a single move, clicking the focused peg will move it.
+- Undo button on the bottom left of the screen, featuring the standard undo round arrow.
+- New Game button on the bottom right.
+- When there are no moves left, show a popup with the number of pegs left and two buttons: new game or undo last move.
+- When you win the game, show a screen with congratulations and fireworks in the background. Single button "new game"
