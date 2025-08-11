@@ -167,7 +167,9 @@ struct ContentView: View {
 
     func attemptMove(_ move: Move) {
         history.append(board)
-        board.apply(move)
+        withAnimation(.easeInOut(duration: 0.6)) {
+            board.apply(move)
+        }
         selected = nil
         evaluateGameState()
     }
@@ -215,5 +217,6 @@ struct PegView: View {
             .overlay(
                 Circle().stroke(Color.primary, lineWidth: isSelected ? 4 : 0)
             )
+            .transition(.opacity)
     }
 }
