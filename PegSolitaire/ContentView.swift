@@ -15,6 +15,9 @@ struct ContentView: View {
     @State private var showGameOver = false
     @State private var showWin = false
     @State private var orientationAngle: Angle = .degrees(0)
+    @State private var draggingFrom: Position? = nil
+    @State private var dragTranslation: CGSize = .zero
+    @State private var isDragging: Bool = false
 
     var body: some View {
         GeometryReader { geo in
@@ -77,14 +80,28 @@ struct ContentView: View {
 
     func boardView(size: CGFloat) -> some View {
         let cellSize = size / CGFloat(Board.size)
-        return VStack(spacing: 4) {
-            ForEach(0..<Board.size, id: \.self) { r in
-                HStack(spacing: 4) {
-                    ForEach(0..<Board.size, id: \.self) { c in
-                        cellView(row: r, col: c, cellSize: cellSize)
-                            .frame(width: cellSize, height: cellSize)
+        let gap: CGFloat = 4
+        let step = cellSize + gap
+        return ZStack {
+            VStack(spacing: gap) {
+                ForEach(0..<Board.size, id: \.self) { r in
+                    HStack(spacing: gap) {
+                        ForEach(0..<Board.size, id: \.self) { c in
+                            cellView(row: r, col: c, cellSize: cellSize)
+                                .frame(width: cellSize, height: cellSize)
+                        }
                     }
                 }
+            }
+
+            // Dragging overlay: a peg that follows the finger
+            if let start = draggingFrom, isDragging {
+                PegView(isSelected: true)
+                    .frame(width: cellSize, height: cellSize)
+                    .position(
+                        x: step * CGFloat(start.col) + cellSize / 2 + dragTranslation.width,
+                        y: step * CGFloat(start.row) + cellSize / 2 + dragTranslation.height
+                    )
             }
         }
         .frame(width: size, height: size)
@@ -108,28 +125,45 @@ struct ContentView: View {
                     }
             case .peg:
                 PegView(isSelected: selected == pos)
+                    .opacity(draggingFrom == pos && isDragging ? 0 : 1)
                     .onTapGesture {
                         handleTap(on: pos)
                     }
                     .gesture(
                         DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                handleTap(on: pos)
+                            .onChanged { value in
+                                if selected != pos {
+                                    handleTap(on: pos)
+                                }
+                                if draggingFrom == nil {
+                                    draggingFrom = pos
+                                    isDragging = true
+                                }
+                                dragTranslation = value.translation
                             }
                             .onEnded { value in
-                                let threshold = cellSize / 2
-                                let dx = value.translation.width
-                                let dy = value.translation.height
-                                var dest: Position?
-                                if abs(dx) > abs(dy) {
-                                    if dx > threshold { dest = Position(row: row, col: col+2) }
-                                    else if dx < -threshold { dest = Position(row: row, col: col-2) }
-                                } else {
-                                    if dy > threshold { dest = Position(row: row+2, col: col) }
-                                    else if dy < -threshold { dest = Position(row: row-2, col: col) }
+                                defer {
+                                    isDragging = false
+                                    dragTranslation = .zero
+                                    draggingFrom = nil
                                 }
-                                if let d = dest {
-                                    attemptMove(from: pos, to: d)
+                                guard let start = draggingFrom else { return }
+                                let gap: CGFloat = 4
+                                let step = cellSize + gap
+                                let startCenterX = step * CGFloat(start.col) + cellSize / 2
+                                let startCenterY = step * CGFloat(start.row) + cellSize / 2
+                                let finalX = startCenterX + value.translation.width
+                                let finalY = startCenterY + value.translation.height
+                                let dropCol = Int(round((finalX - cellSize / 2) / step))
+                                let dropRow = Int(round((finalY - cellSize / 2) / step))
+                                let drop = Position(row: dropRow, col: dropCol)
+                                if let path = multiMovePaths[drop] {
+                                    attemptMultiMove(path)
+                                } else if let sel = selected, let single = board.moves(from: sel).first(where: { $0.to == drop }) {
+                                    attemptMove(single)
+                                } else {
+                                    selected = nil
+                                    updateMultiMovePaths()
                                 }
                             }
                     )
@@ -187,9 +221,8 @@ struct ContentView: View {
     func attemptMove(from: Position, to: Position) {
         if let path = multiMovePaths[to] {
             attemptMultiMove(path)
-        } else if board.moves(from: to).count > 0 {
-            selected = to
-            updateMultiMovePaths()
+        } else if let move = board.moves(from: from).first(where: { $0.to == to }) {
+            attemptMove(move)
         } else {
             selected = nil
             updateMultiMovePaths()
