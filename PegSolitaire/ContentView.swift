@@ -10,7 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var board = Board.standard()
     @State private var selected: Position? = nil
-    @State private var multiMovePaths: [Position: [Move]] = [:]
+    @State private var multiMovePaths: [Position: [[Move]]] = [:]
     @State private var history: [Board] = []
     @State private var showGameOver = false
     @State private var showWin = false
@@ -18,12 +18,25 @@ struct ContentView: View {
     @State private var draggingFrom: Position? = nil
     @State private var dragTranslation: CGSize = .zero
     @State private var isDragging: Bool = false
+    @State private var moveCount: Int = 0
+    @State private var currentDragPath: [Move]? = nil
+    @State private var dragTarget: Position? = nil
+
+    private let moveAnimationDuration: Double = 0.22
+    private var moveAnimation: Animation { .easeInOut(duration: moveAnimationDuration) }
 
     var body: some View {
         GeometryReader { geo in
             let padding: CGFloat = 20
             let boardSize = min(geo.size.width, geo.size.height) - padding * 2
             VStack {
+                HStack {
+                    Spacer()
+                    Text("Moves: \(moveCount)")
+                        .font(.headline)
+                }
+                .padding(.top, 10)
+                .padding(.trailing, 20)
                 Spacer()
                 boardView(size: boardSize)
                     .rotationEffect(orientationAngle)
@@ -63,9 +76,7 @@ struct ContentView: View {
             Text("\(board.pegCount()) pegs left")
         }
         .fullScreenCover(isPresented: $showWin) {
-            WinView {
-                newGame()
-            }
+            WinView(newGame: newGame, moveCount: moveCount)
         }
     }
 
@@ -102,6 +113,31 @@ struct ContentView: View {
                         x: step * CGFloat(start.col) + cellSize / 2 + dragTranslation.width,
                         y: step * CGFloat(start.row) + cellSize / 2 + dragTranslation.height
                     )
+
+                // Show the current drag path
+                if let path = currentDragPath, !path.isEmpty {
+                    ForEach(Array(path.enumerated()), id: \.offset) { index, move in
+                        Circle()
+                            .fill(Color.blue.opacity(0.5))
+                            .frame(width: cellSize * 0.3, height: cellSize * 0.3)
+                            .position(
+                                x: step * CGFloat(move.over.col) + cellSize / 2,
+                                y: step * CGFloat(move.over.row) + cellSize / 2
+                            )
+                    }
+
+                    // Show the path number and target
+                    if let target = dragTarget {
+                        Text("\(path.count)")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(.blue)
+                            .background(Circle().fill(Color.white.opacity(0.8)))
+                            .position(
+                                x: step * CGFloat(target.col) + cellSize / 2,
+                                y: step * CGFloat(target.row) + cellSize / 2
+                            )
+                    }
+                }
             }
         }
         .frame(width: size, height: size)
@@ -120,7 +156,11 @@ struct ContentView: View {
                     .background(destinationHighlight(pos))
                     .onTapGesture {
                         if let sel = selected {
-                            attemptMove(from: sel, to: pos)
+                            // Allow clicking if there's at least one path to this target
+                            if let paths = multiMovePaths[pos], !paths.isEmpty {
+                                // Use the first available path
+                                attemptMultiMove(paths[0])
+                            }
                         }
                     }
             case .peg:
@@ -138,7 +178,53 @@ struct ContentView: View {
                                 if draggingFrom == nil {
                                     draggingFrom = pos
                                     isDragging = true
+                                    currentDragPath = nil
+                                    dragTarget = nil
                                 }
+
+                                // Track the drag path in real-time
+                                let gap: CGFloat = 4
+                                let step = cellSize + gap
+                                let startCenterX = step * CGFloat(pos.col) + cellSize / 2
+                                let startCenterY = step * CGFloat(pos.row) + cellSize / 2
+                                let currentX = startCenterX + value.translation.width
+                                let currentY = startCenterY + value.translation.height
+                                let currentCol = Int(round((currentX - cellSize / 2) / step))
+                                let currentRow = Int(round((currentY - cellSize / 2) / step))
+                                let currentPos = Position(row: currentRow, col: currentCol)
+
+                                // Build the drag path step by step as user drags
+                                if board.isValidPosition(currentPos) {
+                                    print("Current pos: \(currentPos), Starting pos: \(pos)")
+
+                                    if currentDragPath == nil {
+                                        // First move: from starting position to current position
+                                        if let newMove = board.moves(from: pos).first(where: { $0.to == currentPos }) {
+                                            currentDragPath = [newMove]
+                                            dragTarget = currentPos
+                                            print("Started path: \(newMove.from) -> \(newMove.over) -> \(newMove.to)")
+                                        } else {
+                                            print("No valid first move from \(pos) to \(currentPos)")
+                                        }
+                                    } else {
+                                        // Subsequent moves: extend the path from the last position
+                                        if let lastMove = currentDragPath?.last {
+                                            print("Looking for move from \(lastMove.to) to \(currentPos)")
+                                            // Check if this move would be valid by simulating the board state
+                                            if let newMove = board.findMoveInPath(from: lastMove.to, to: currentPos, path: currentDragPath ?? []) {
+                                                currentDragPath?.append(newMove)
+                                                dragTarget = currentPos
+                                                print("Extended path: \(newMove.from) -> \(newMove.over) -> \(newMove.to)")
+                                            } else {
+                                                print("No valid move from \(lastMove.to) to \(currentPos)")
+                                                // Check what moves are available from lastMove.to
+                                                let availableMoves = board.moves(from: lastMove.to)
+                                                print("Available moves from \(lastMove.to): \(availableMoves)")
+                                            }
+                                        }
+                                    }
+                                }
+
                                 dragTranslation = value.translation
                             }
                             .onEnded { value in
@@ -146,7 +232,21 @@ struct ContentView: View {
                                     isDragging = false
                                     dragTranslation = .zero
                                     draggingFrom = nil
+                                    currentDragPath = nil
+                                    dragTarget = nil
                                 }
+
+                                // Use the tracked path if available
+                                if let path = currentDragPath, !path.isEmpty {
+                                    print("Executing tracked path with \(path.count) moves:")
+                                    for (i, move) in path.enumerated() {
+                                        print("  Move \(i): \(move.from) -> \(move.over) -> \(move.to)")
+                                    }
+                                    attemptMultiMove(path)
+                                    return
+                                }
+
+                                // If no path was tracked, try to find a single move to the final position
                                 guard let start = draggingFrom else { return }
                                 let gap: CGFloat = 4
                                 let step = cellSize + gap
@@ -157,9 +257,8 @@ struct ContentView: View {
                                 let dropCol = Int(round((finalX - cellSize / 2) / step))
                                 let dropRow = Int(round((finalY - cellSize / 2) / step))
                                 let drop = Position(row: dropRow, col: dropCol)
-                                if let path = multiMovePaths[drop] {
-                                    attemptMultiMove(path)
-                                } else if let sel = selected, let single = board.moves(from: sel).first(where: { $0.to == drop }) {
+
+                                if let sel = selected, let single = board.moves(from: sel).first(where: { $0.to == drop }) {
                                     attemptMove(single)
                                 } else {
                                     selected = nil
@@ -172,11 +271,19 @@ struct ContentView: View {
     }
 
     func destinationHighlight(_ pos: Position) -> some View {
-        let dests = Set(multiMovePaths.keys)
-        return Group {
-            if dests.contains(pos) {
-                Circle()
-                    .fill(Color.primary.opacity(0.2))
+        Group {
+            if let paths = multiMovePaths[pos], !paths.isEmpty {
+                let firstPath = paths[0]
+                let isMultiMove = firstPath.count > 1
+                ZStack {
+                    Circle()
+                        .fill(isMultiMove ? Color.orange.opacity(0.3) : Color.green.opacity(0.3))
+                    if isMultiMove {
+                        Text("\(firstPath.count)")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(.primary)
+                    }
+                }
             } else {
                 Color.clear
             }
@@ -185,12 +292,13 @@ struct ContentView: View {
 
     func handleTap(on pos: Position) {
         if selected == pos {
-            if multiMovePaths.count == 1, let path = multiMovePaths.values.first {
-                attemptMultiMove(path)
+            // Auto-execute if there's exactly one destination available
+            if multiMovePaths.count == 1, let paths = multiMovePaths.values.first, !paths.isEmpty {
+                attemptMultiMove(paths[0])
             } else {
                 selected = nil
-                updateMultiMovePaths()
             }
+            updateMultiMovePaths()
             return
         }
 
@@ -204,11 +312,11 @@ struct ContentView: View {
 
     func attemptMove(_ move: Move) {
         history.append(board)
-        withAnimation(.easeInOut(duration: 0.6)) {
+        withAnimation(moveAnimation) {
             board.movePeg(from: move.from, to: move.to)
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            withAnimation(.easeInOut(duration: 0.6)) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + moveAnimationDuration) {
+            withAnimation(moveAnimation) {
                 board.removePeg(at: move.over)
             }
             evaluateGameState()
@@ -216,11 +324,12 @@ struct ContentView: View {
         selected = nil
         updateMultiMovePaths()
         evaluateGameState()
+        moveCount += 1
     }
 
     func attemptMove(from: Position, to: Position) {
-        if let path = multiMovePaths[to] {
-            attemptMultiMove(path)
+        if let paths = multiMovePaths[to], !paths.isEmpty {
+            attemptMultiMove(paths[0])
         } else if let move = board.moves(from: from).first(where: { $0.to == to }) {
             attemptMove(move)
         } else {
@@ -230,15 +339,47 @@ struct ContentView: View {
     }
 
     func attemptMultiMove(_ moves: [Move]) {
+        print("attemptMultiMove called with \(moves.count) moves")
         history.append(board)
-        withAnimation(.easeInOut(duration: 0.6)) {
-            for m in moves {
-                board.apply(m)
+
+        // Execute each move in sequence
+        for (index, move) in moves.enumerated() {
+            let delay = moveAnimationDuration * Double(index)
+            print("Scheduling move \(index): \(move.from) -> \(move.over) -> \(move.to) with delay \(delay)")
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                print("Executing move \(index): \(move.from) -> \(move.over) -> \(move.to)")
+                withAnimation(moveAnimation) {
+                    // Move the peg to the next position
+                    if index == 0 {
+                        // First move: from start position to first intermediate position
+                        print("Moving peg from \(move.from) to \(move.to)")
+                        board.movePeg(from: move.from, to: move.to)
+                    } else {
+                        // Subsequent moves: from previous position to next position
+                        let previousMove = moves[index - 1]
+                        print("Moving peg from \(previousMove.to) to \(move.to)")
+                        board.movePeg(from: previousMove.to, to: move.to)
+                    }
+
+                    // Remove the peg that was jumped over
+                    print("Removing peg at \(move.over)")
+                    board.removePeg(at: move.over)
+                }
+
+                // Evaluate game state after the last move completes
+                if index == moves.count - 1 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + moveAnimationDuration) {
+                        print("All moves completed, evaluating game state. Peg count: \(board.pegCount())")
+                        evaluateGameState()
+                    }
+                }
             }
         }
+
         selected = nil
         updateMultiMovePaths()
-        evaluateGameState()
+        moveCount += 1
     }
 
     func undo() {
@@ -246,6 +387,7 @@ struct ContentView: View {
             board = last
             selected = nil
             updateMultiMovePaths()
+            if moveCount > 0 { moveCount -= 1 }
         }
     }
 
@@ -256,6 +398,7 @@ struct ContentView: View {
         updateMultiMovePaths()
         showWin = false
         showGameOver = false
+        moveCount = 0
     }
 
     func evaluateGameState() {
@@ -268,10 +411,13 @@ struct ContentView: View {
 
     func updateMultiMovePaths() {
         if let sel = selected {
-            multiMovePaths = board.multiMoveDestinations(from: sel)
+            multiMovePaths = board.allMultiMoveDestinations(from: sel)
         } else {
             multiMovePaths = [:]
         }
+        // Clear drag state when paths change
+        currentDragPath = nil
+        dragTarget = nil
     }
 }
 

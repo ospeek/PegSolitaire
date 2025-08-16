@@ -100,11 +100,21 @@ struct Board {
 
     func multiMoveDestinations(from start: Position) -> [Position: [Move]] {
         guard cell(at: start) == .peg else { return [:] }
+        var allPaths: [Position: [[Move]]] = [:]
         var result: [Position: [Move]] = [:]
+
         func dfs(board: Board, pos: Position, path: [Move]) {
             let moves = board.moves(from: pos)
-            if !path.isEmpty, result[pos] == nil {
-                result[pos] = path
+            if !path.isEmpty {
+                if allPaths[pos] == nil {
+                    allPaths[pos] = []
+                }
+                allPaths[pos]!.append(path)
+
+                // Keep the shortest path for the result
+                if result[pos] == nil || path.count < result[pos]!.count {
+                    result[pos] = path
+                }
             }
             for m in moves {
                 var newBoard = board
@@ -114,8 +124,62 @@ struct Board {
                 dfs(board: newBoard, pos: m.to, path: newPath)
             }
         }
+
         dfs(board: self, pos: start, path: [])
-        result.removeValue(forKey: start)
         return result
+    }
+
+    func allMultiMoveDestinations(from start: Position) -> [Position: [[Move]]] {
+        guard cell(at: start) == .peg else { return [:] }
+        var result: [Position: [[Move]]] = [:]
+
+        func dfs(board: Board, pos: Position, path: [Move]) {
+            let moves = board.moves(from: pos)
+            if !path.isEmpty {
+                if result[pos] == nil {
+                    result[pos] = []
+                }
+                result[pos]!.append(path)
+            }
+            for m in moves {
+                var newBoard = board
+                newBoard.apply(m)
+                var newPath = path
+                newPath.append(m)
+                dfs(board: newBoard, pos: m.to, path: newPath)
+            }
+        }
+
+        dfs(board: self, pos: start, path: [])
+        return result
+    }
+
+    func isValidPosition(_ pos: Position) -> Bool {
+        return pos.row >= 0 && pos.row < Self.size && pos.col >= 0 && pos.col < Self.size && cell(at: pos) != .invalid
+    }
+
+    func findMove(from start: Position, to target: Position, currentPath: [Move]) -> Move? {
+        // If this is the first move, find a direct move from start to target
+        if currentPath.isEmpty {
+            return moves(from: start).first { $0.to == target }
+        }
+
+        // If we have a current path, find a move from the last position in the path to the target
+        if let lastMove = currentPath.last {
+            return moves(from: lastMove.to).first { $0.to == target }
+        }
+
+        return nil
+    }
+
+    func findMoveInPath(from start: Position, to target: Position, path: [Move]) -> Move? {
+        // Create a simulated board by applying the path so far
+        var simulatedBoard = self
+        for move in path {
+            simulatedBoard.apply(move)
+        }
+
+        // Now check if there's a valid move from start to target on the simulated board
+        return simulatedBoard.moves(from: start).first { $0.to == target }
     }
 }

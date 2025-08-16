@@ -6,54 +6,194 @@
 //
 
 import SwiftUI
-import UIKit
 
-struct FireworksView: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        FireworksUIView()
+struct FireworksView: View {
+    @State private var fireworks: [Firework] = []
+    @State private var timer: Timer?
+
+    var body: some View {
+        ZStack {
+            // Background fireworks
+            ForEach(fireworks) { firework in
+                FireworkParticle(firework: firework)
+            }
+        }
+        .onAppear {
+            startFireworks()
+        }
+        .onDisappear {
+            stopFireworks()
+        }
     }
-    func updateUIView(_ uiView: UIView, context: Context) {}
+
+    private func startFireworks() {
+        timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
+            createNewFirework()
+        }
+    }
+
+    private func stopFireworks() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    private func createNewFirework() {
+        let newFirework = Firework()
+        fireworks.append(newFirework)
+
+        // Remove old fireworks after animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6.0) {
+            fireworks.removeAll { $0.id == newFirework.id }
+        }
+    }
 }
 
-class FireworksUIView: UIView {
-    override class var layerClass: AnyClass { CAEmitterLayer.self }
+struct Firework: Identifiable {
+    let id = UUID()
+    let startPosition: CGPoint
+    let color: Color
+    let particles: [FireworkParticleData]
 
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        guard let emitter = self.layer as? CAEmitterLayer else { return }
-        emitter.emitterPosition = CGPoint(x: bounds.midX, y: bounds.maxY)
-        emitter.emitterSize = CGSize(width: bounds.size.width, height: 2)
-        emitter.emitterShape = .line
-        emitter.renderMode = .additive
+    init() {
+        let screenWidth = UIScreen.main.bounds.width
+        startPosition = CGPoint(
+            x: CGFloat.random(in: 10...(screenWidth - 20)),
+            y: UIScreen.main.bounds.height + 5
+        )
 
-        let cell = CAEmitterCell()
-        cell.birthRate = 3
-        cell.lifetime = 3.0
-        cell.velocity = 250
-        cell.velocityRange = 100
-        cell.emissionLongitude = -.pi / 2
-        cell.emissionRange = .pi / 4
-        cell.scale = 0.02
-        cell.scaleRange = 0.02
-        cell.contents = UIImage(systemName: "star.fill")?.withTintColor(.systemYellow, renderingMode: .alwaysOriginal).cgImage
-        cell.alphaSpeed = -0.4
+        color = [.yellow, .red, .blue, .green, .orange, .pink, .purple, .cyan, .mint].randomElement() ?? .yellow
 
-        emitter.emitterCells = [cell]
+        // Create more particles for each firework
+        var particleData: [FireworkParticleData] = []
+        for _ in 0..<25 {
+            particleData.append(FireworkParticleData())
+        }
+        particles = particleData
+    }
+}
+
+struct FireworkParticleData {
+    let angle: Double
+    let velocity: Double
+    let delay: Double
+
+    init() {
+        angle = Double.random(in: 0...(2 * .pi))
+        velocity = Double.random(in: 300...600)
+        delay = Double.random(in: 0...0.3)
+    }
+}
+
+struct FireworkParticle: View {
+    let firework: Firework
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(firework.particles.enumerated()), id: \.offset) { index, particle in
+                ZStack {
+                    // Outer glow
+                    Circle()
+                        .fill(firework.color)
+                        .frame(width: 16, height: 16)
+                        .shadow(color: firework.color, radius: 8, x: 0, y: 0)
+
+                    // Inner bright core
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 8, height: 8)
+                        .shadow(color: .white, radius: 4, x: 0, y: 0)
+                }
+                .offset(
+                    x: firework.startPosition.x,
+                    y: firework.startPosition.y
+                )
+                .modifier(FireworkAnimation(particle: particle))
+            }
+        }
+    }
+}
+
+struct FireworkAnimation: ViewModifier {
+    let particle: FireworkParticleData
+    @State private var isAnimating = false
+
+    func body(content: Content) -> some View {
+        content
+            .offset(
+                x: isAnimating ? cos(particle.angle) * particle.velocity : 0,
+                y: isAnimating ? sin(particle.angle) * particle.velocity - 300 : 0
+            )
+            .opacity(isAnimating ? 0 : 1)
+            .scaleEffect(isAnimating ? 0.3 : 1.0)
+            .animation(
+                .easeOut(duration: 3.0)
+                .delay(particle.delay),
+                value: isAnimating
+            )
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    isAnimating = true
+                }
+            }
     }
 }
 
 struct WinView: View {
     var newGame: () -> Void
+    var moveCount: Int
+
     var body: some View {
-        ZStack {
-            FireworksView()
+        GeometryReader { geometry in
+            ZStack {
+                // Background gradient
+                LinearGradient(
+                    colors: [Color.black.opacity(0.95), Color.purple.opacity(0.8)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
                 .ignoresSafeArea()
-            VStack(spacing: 20) {
-                Text("Congratulations!")
-                    .font(.largeTitle)
-                    .bold()
-                Button("New Game", action: newGame)
-                    .buttonStyle(.borderedProminent)
+
+                // Fireworks overlay - ensure it covers the full screen
+                FireworksView()
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .ignoresSafeArea()
+
+                // Content
+                VStack(spacing: 30) {
+                    Spacer()
+
+                    Text("🎉")
+                        .font(.system(size: 80))
+                        .shadow(radius: 15)
+
+                    Text("Congratulations!")
+                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .shadow(radius: 10)
+                        .multilineTextAlignment(.center)
+
+                    Text("Moves: \(moveCount)")
+                        .font(.title2)
+                        .foregroundColor(.white.opacity(0.9))
+                        .shadow(radius: 5)
+
+                    Text("You solved the puzzle!")
+                        .font(.title2)
+                        .foregroundColor(.white.opacity(0.9))
+                        .shadow(radius: 5)
+
+                    Spacer()
+
+                    Button("New Game", action: newGame)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .font(.title2)
+                        .padding(.horizontal, 40)
+                        .padding(.vertical, 15)
+
+                    Spacer()
+                }
+                .padding()
             }
         }
     }
